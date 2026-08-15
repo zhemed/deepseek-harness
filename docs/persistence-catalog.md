@@ -941,4 +941,37 @@ Source: [`packages/core/session/src/types.ts:264`](../packages/core/session/src/
 'web/deepseek-search-llm-request': DeepSeekSearchLlmRequest
 ```
 
-Source: [`packages/web/web-search-deepseek/src/provider.ts:83`](../packages/web/web-search-deepseek/src/provider.ts)
+Source: [`packages/web/web-search-deepseek/src/provider.ts:139`](../packages/web/web-search-deepseek/src/provider.ts)
+
+<a id="websearch-call--log-only"></a>
+
+#### `web/search-call` — log-only
+
+```ts persistence-catalog
+/** One search operation started (query + effort). */
+'web/search-call': WebSearchCallEventData
+```
+
+Source: [`packages/web/web-search-deepseek/src/provider.ts:141`](../packages/web/web-search-deepseek/src/provider.ts)
+
+<a id="websearch-done--log-only"></a>
+
+#### `web/search-done` — log-only
+
+```ts persistence-catalog
+/** One search completed (final source count). */
+'web/search-done': WebSearchDoneEventData
+```
+
+Source: [`packages/web/web-search-deepseek/src/provider.ts:145`](../packages/web/web-search-deepseek/src/provider.ts)
+
+<a id="websearch-thinking--log-only"></a>
+
+#### `web/search-thinking` — log-only
+
+```ts persistence-catalog
+/** Cumulative thinking text for one in-flight search (throttled). */
+'web/search-thinking': WebSearchThinkingEventData
+```
+
+Source: [`packages/web/web-search-deepseek/src/provider.ts:143`](../packages/web/web-search-deepseek/src/provider.ts)
