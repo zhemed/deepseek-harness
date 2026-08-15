@@ -96,6 +96,8 @@ export interface DeepSeekSearchLlmRequest {
     readonly stream?: boolean
     /** Thinking block configuration; present unless the effort level is `off`. */
     readonly thinking?: { readonly type: 'enabled'; readonly budget_tokens: number }
+    /** Effort level forwarded to the provider; present unless the effort level is off. */
+    readonly output_config?: { readonly effort: 'high' | 'max' }
   }
 }
 
@@ -280,7 +282,7 @@ export class DeepSeekSearchProvider implements WebSearchProvider {
       }],
       tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: options.maxUses }],
       stream: true,
-      ...effort !== 'off' ? { thinking: { type: 'enabled', budget_tokens: THINKING_BUDGETS[effort] } } : {},
+      ...effort !== 'off' ? { thinking: { type: 'enabled', budget_tokens: THINKING_BUDGETS[effort] }, output_config: { effort } } : {},
     }
     options.recordRequest?.({ endpoint, apiVersion: options.apiVersion, body })
     options.emitSearchEvent?.({
