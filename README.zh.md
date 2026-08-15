@@ -1,12 +1,12 @@
-# DeepSeek Harness（自部署维护版）
+# DeepSeek Harness
 
 [English](README.md) | 中文
 
-这是 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（`dsh`）的**自主维护版**。dsh 是由 [DeepSeek AI](https://deepseek.com) 开源的 agent harness（智能体框架），采用 MIT 协议。
+DeepSeek Harness（`dsh`）是一个采用 MIT 协议的开源 agent harness（智能体框架），由 [DeepSeek AI](https://deepseek.com) 发起开发。
 
 它采用**一切皆插件**的架构，并由 [Cordis](https://github.com/cordiverse/cordis) 驱动，其设计参见论文 [_A Programming Paradigm for Spatiotemporal Composability_](https://github.com/cordiverse/paper)。
 
-> 本仓库由 [zhemed](https://github.com/zhemed) 独立维护，跟随上游并加入自托管修复：局域网访问、明文 HTTP 兼容、DeepSeek V4 思考档位透传等。
+> 本仓库由 [zhemed](https://github.com/zhemed) 维护，提供局域网访问、明文 HTTP 兼容、DeepSeek V4 思考档位透传等能力。
 
 ## 从源码运行
 
@@ -20,7 +20,7 @@ pnpm dsh web
 
 该命令会启动 Web UI，默认地址为 `http://127.0.0.1:3080`。详见 [Web UI 指南](docs/user/guide/index.md)。
 
-> 官方 npm 包（`npx @deepseek-ai/dsh web`）由 DeepSeek AI 发布；本自维护版以源码方式部署。
+> 本仓库以源码方式部署 `dsh`。
 
 ## 反馈与支持
 

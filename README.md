@@ -1,12 +1,12 @@
-# DeepSeek Harness (Self-Hosted Edition)
+# DeepSeek Harness
 
 English | [中文](README.zh.md)
 
-This is a **self-hosted, independently maintained edition** of [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (`dsh`), an open-source agent harness originally developed by [DeepSeek AI](https://deepseek.com), released under the MIT license.
+DeepSeek Harness (`dsh`) is an open-source agent harness released under the MIT license, originally developed by [DeepSeek AI](https://deepseek.com).
 
 It uses an architecture where **everything is a plugin**, and is powered by [Cordis](https://github.com/cordiverse/cordis), whose design is described in [_A Programming Paradigm for Spatiotemporal Composability_](https://github.com/cordiverse/paper).
 
-> This repository is maintained by [zhemed](https://github.com/zhemed). It tracks upstream and adds self-hosting fixes: LAN access, plain-HTTP compatibility, and DeepSeek V4 thinking-effort passthrough.
+> Maintained by [zhemed](https://github.com/zhemed), with LAN access, plain-HTTP compatibility, and DeepSeek V4 thinking-effort passthrough.
 
 ## Run from source
 
@@ -20,7 +20,7 @@ pnpm dsh web
 
 The command starts the Web UI, served at `http://127.0.0.1:3080` by default. See [Web UI guide](docs/user/guide/index.md).
 
-> The official npm package (`npx @deepseek-ai/dsh web`) is published by DeepSeek AI; this self-hosted edition is deployed from source.
+> This repository deploys `dsh` from source.
 
 ## Feedback and support
 
