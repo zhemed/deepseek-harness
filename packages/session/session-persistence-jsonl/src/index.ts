@@ -508,6 +508,36 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
     return artifacts
   }
 
+  /**
+   * Remove one session through the coordinator: retire-wait, live checks,
+   * bookkeeping cleanup, then the backend artifact removal.
+   * @param id - the persisted session to remove.
+   * @param signal - optional cancellation for queued and backend work.
+   */
+  async remove(id: SessionId, signal?: AbortSignal): Promise<void> {
+    return this.coordinator.remove(id, signal)
+  }
+
+  /**
+   * Durably delete one session's log directory. An absent identity is a
+   * no-op. Deletion keys on the directory naming convention
+   * (`encodeSegment(id)` under each project scope) instead of parsing the
+   * log, so even an unreadable/corrupt artifact can be removed.
+   * @param id - the persisted session to remove.
+   * @param signal - optional cancellation for directory scans and removal.
+   */
+  async removeStored(id: SessionId, signal?: AbortSignal): Promise<void> {
+    signal?.throwIfAborted()
+    const segment = encodeSegment(id)
+    for (const project of await this.listProjectDirs(signal)) {
+      signal?.throwIfAborted()
+      const dir = join(project, segment)
+      if (!(await this.exists(dir))) continue
+      await rm(dir, { recursive: true, force: true })
+      return
+    }
+  }
+
   // --- materialization / append / repair (file mechanics) ---
 
   /** Atomically write the header line + first batch (temp-write, fsync, publish). */

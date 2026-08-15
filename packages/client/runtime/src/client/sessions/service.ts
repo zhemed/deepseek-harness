@@ -432,6 +432,21 @@ export class SessionRuntime implements ISessions {
   }
 
   /**
+   * Permanently delete one session: the host retires its live agent (if
+   * any), removes the durable log and its workspace accounting, and the
+   * local row disappears (via the `host/session-removed` frame for a live
+   * session, or the refresh below for a cold one). A running session is
+   * refused by the host.
+   * @param sessionId - the session to delete.
+   * @throws {Error} with the RPC error code and message on failure.
+   */
+  async deleteSession(sessionId: SessionId): Promise<void> {
+    const result = await this.manager.delete(sessionId)
+    if (!result.ok) throw new Error(`session delete failed: ${result.error.code}: ${result.error.message}`)
+    void this.refresh()
+  }
+
+  /**
    * Search the Host's visible message-content index. Results stay
    * request-local; the list snapshot remains the metadata authority.
    * @param query - non-blank literal phrase.

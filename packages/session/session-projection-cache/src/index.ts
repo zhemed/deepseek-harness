@@ -130,6 +130,22 @@ export class SessionProjectionCache extends Service {
   }
 
   /**
+   * Drop one session's cached projection row after its log is gone. An
+   * absent row is a no-op. Fail-soft like every durable write here: a
+   * surviving stale row is inert (the session is no longer listed) and is
+   * pruned by this call on a later delete.
+   * @param sessionId - the deleted session whose cache row to drop.
+   * @returns resolution after the durable delete (or the contained failure).
+   */
+  async forget(sessionId: SessionId): Promise<void> {
+    try {
+      await this.requireTable().delete(sessionId)
+    } catch (error) {
+      this.ctx.logger.warn(`session projection cache could not drop row for "${sessionId}": ${String(error)}`)
+    }
+  }
+
+  /**
    * Durably checkpoint one live session NOW (both mandatory points call
    * this; tests and carriers may too). The registry cut is snapshotted at
    * this boundary (states are live references), then the whole record is

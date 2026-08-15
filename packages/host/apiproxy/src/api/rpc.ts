@@ -51,6 +51,8 @@ export interface RpcErrorDetailsMap {
   'agent-preset-not-found': { agentPreset: string; available: string[] }
   'agent-preset-invalid': { agentPreset: string; reason: string }
   'agent-busy': { reason: string }
+  /** A session delete was refused while the session's agent is mid-turn. */
+  'session-busy': { sessionId: SessionId }
   'attachment-error': { reason: string }
   'queue-item-not-found': { itemId: MessageId }
   'steer-unavailable': { itemId: MessageId }

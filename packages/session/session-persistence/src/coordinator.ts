@@ -199,6 +199,15 @@ export interface PersistenceBackend<TornMarker = unknown> {
   list(signal?: AbortSignal): Promise<SessionHeader[]>
 
   /**
+   * Durably delete one stored session's artifact. An absent identity is a
+   * no-op. The coordinator refuses live sessions before delegating here, so
+   * backends may assume no in-flight writer for the id.
+   * @param id - the persisted session to remove.
+   * @param signal - optional cancellation for backend deletion work.
+   */
+  removeStored(id: SessionId, signal?: AbortSignal): Promise<void>
+
+  /**
    * Optional side-effect-free artifact locator, used to point refusal
    * diagnostics ({@link SessionFormatUnsupportedError}) at the raw log.
    * Backends without one artifact per session omit it or return `undefined`.
@@ -816,6 +825,39 @@ export class PersistenceCoordinator<TornMarker = unknown> {
         throw error
       }
     }
+  }
+
+  /**
+   * Durably remove one session's stored artifact and drop all coordinator
+   * bookkeeping for it. Refuses while a live Session is bound to the id —
+   * the caller must retire/dispose the live Session first (the API-layer
+   * delete flow owns that ordering). A session absent from storage is a
+   * no-op.
+   * @param id - the persisted session to remove.
+   * @param signal - optional cancellation for backend removal work.
+   */
+  async remove(id: SessionId, signal?: AbortSignal): Promise<void> {
+    // Session disposal starts the retirement (final write-behind drain) as a
+    // fire-and-forget observer, so the drain is NOT on the per-id chain: the
+    // flush may still be materializing/appending while this chain slot runs.
+    // Await the retirement first — the drain is the last write a live session
+    // can produce, so removing only after it settles cannot race a resurrect.
+    const retired = Promise.resolve(this.retirements.get(id))
+    const waited = signal === undefined ? retired : observeQueuedAbort(retired, signal, () => false)
+    return waited.then(() => this.serialize(id, async () => {
+      signal?.throwIfAborted()
+      const state = this.states.get(id)
+      if (state?.owner !== undefined) {
+        throw new Error(`cannot remove session "${id}": it is still live`)
+      }
+      for (const session of this.live.keys()) {
+        if (session.header.id === id) {
+          throw new Error(`cannot remove session "${id}": it is still live`)
+        }
+      }
+      this.states.delete(id)
+      await this.backend.removeStored(id, signal)
+    }, signal))
   }
 
   /**

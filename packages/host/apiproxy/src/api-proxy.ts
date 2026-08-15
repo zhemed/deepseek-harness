@@ -8,7 +8,7 @@ import { mkdir, stat } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import { installModelSelection } from '@deepseek-ai/dsh-agent'
-import type { Agent, ModelSelection, ModelSelectionRef, AgentOptions, AgentStatus } from '@deepseek-ai/dsh-agent'
+import type { Agent, ModelSelection, ModelSelectionRef, AgentOptions, AgentStatus, AgentHandle } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent-presets/types'
 import { AttachmentError } from '@deepseek-ai/dsh-attachment'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
@@ -1125,6 +1125,13 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
   const presetSwitches = new Map<SessionId, Promise<unknown>>()
   /** Client-chosen identity creation/resume, deduplicated across concurrent retries. */
   const sessionCreations = new Map<SessionId, Promise<Agent>>()
+  /**
+   * Live agent handles retained by the gateway since their creation/resume:
+   * the delete flow disposes the handle to retire the agent and its session
+   * before removing the durable log. A handle recorded here is also tracked
+   * by the loop's own ownership, so disposal is idempotent either way.
+   */
+  const agentHandles = new Map<SessionId, AgentHandle>()
   /** Serializes path ownership and explicit title checks with Workspace mutations. */
   let workspaceCreationChain = Promise.resolve()
   const pendingQuestions = new Map<RpcId, PendingQuestion>()
@@ -1654,11 +1661,13 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           // session's history was produced under that composition, and
           // rebuilding it differently would replay tool calls the model can no
           // longer make.
-          return (await ctx.agents.resume({
+          const resumed = await ctx.agents.resume({
             resumeSessionId: sessionId,
             agentOptions: agentOptions(),
             setup: (await composeAgent(storedPreset)).setup,
-          })).agent
+          })
+          agentHandles.set(sessionId, resumed)
+          return resumed.agent
         }
 
         try {
@@ -1667,7 +1676,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           throw new Error(`failed to ensure project directory "${cwd}": ${String(error)}`, { cause: error })
         }
         const composition = await composeAgent(presetId)
-        return (await ctx.agents.create({
+        const created = await ctx.agents.create({
           sessionId,
           agentOptions: agentOptions(),
           meta: {
@@ -1675,7 +1684,9 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             ...composition.agentPreset === undefined ? {} : { agentPreset: composition.agentPreset },
           },
           setup: composition.setup,
-        })).agent
+        })
+        agentHandles.set(sessionId, created)
+        return created.agent
       })().catch((error: unknown) => {
         // Another Host entry path may have published the same identity while
         // this operation crossed an asynchronous persistence/filesystem step.
@@ -2237,6 +2248,70 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         const created = ctx.agents.get(sessionId)
         const createdPreset = created === undefined ? undefined : resolveSessionPreset(created.session)
         return ok(request, { sessionId, ...createdPreset === undefined ? {} : { agentPreset: createdPreset } })
+      },
+
+      async delete(request) {
+        const { sessionId } = request.payload
+        // The gateway's own scope does not inject session persistence; the
+        // runtime lookup matches every other cold-read path in this file.
+        const persistence = ctx.get('sessionPersistence')
+        if (persistence === undefined) {
+          return err(request, {
+            code: 'internal',
+            message: 'session persistence is not configured; cannot delete sessions',
+            details: { sessionId },
+          })
+        }
+        try {
+          const live = ctx.agents.get(sessionId)
+          if (live !== undefined && live.status === 'running') {
+            return err(request, {
+              code: 'session-busy',
+              message: `session "${sessionId}" is running; stop it before deleting`,
+              details: { sessionId },
+            })
+          }
+          const attached = ctx.sessions.get(sessionId)
+          if (attached !== undefined && hasSubagentOwner(attached, live)) {
+            return err(request, subagentOwnershipError(sessionId))
+          }
+          const persisted = (await persistence.list())
+            .some(header => header.id === sessionId)
+          if (live === undefined && !persisted) {
+            return err(request, {
+              code: 'session-not-found',
+              message: `cannot delete session "${sessionId}": no live or persisted session with this id`,
+              details: { sessionId },
+            })
+          }
+          if (live !== undefined) {
+            // Retire the agent (and with it the live Session and its
+            // write-behind) before touching the durable log, so no in-flight
+            // writer can resurrect the artifact being removed.
+            const handle = agentHandles.get(sessionId)
+            if (handle === undefined) {
+              return err(request, {
+                code: 'internal',
+                message: `session "${sessionId}" is live but its agent handle is not tracked; cannot delete`,
+                details: { sessionId },
+              })
+            }
+            await handle.dispose()
+            agentHandles.delete(sessionId)
+          }
+          await ctx.workspaceRegistry.forgetSession(sessionId)
+          await persistence.remove(sessionId)
+          // The projection cache checkpoints the same lifecycle; its stale row
+          // is inert but would linger forever, so drop it with the log.
+          await ctx.get('sessionProjectionCache')?.forget(sessionId)
+          return ok(request, { sessionId })
+        } catch (error: unknown) {
+          return err(request, {
+            code: 'internal',
+            message: `failed to delete session "${sessionId}": ${String(error)}`,
+            details: { sessionId },
+          })
+        }
       },
 
       async history(request) {

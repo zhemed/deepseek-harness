@@ -2506,6 +2506,17 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
         }
         return ok(request, { accepted: true as const })
       },
+      delete: (request) => {
+        const sessionId = request.payload.sessionId
+        sessions.splice(sessions.findIndex(summary => summary.sessionId === sessionId), 1)
+        logs.delete(sessionId)
+        const workspace = workspaces.find(candidate => candidate.sessionIds.includes(sessionId))
+        if (workspace !== undefined) {
+          workspace.sessionIds = workspace.sessionIds.filter(id => id !== sessionId)
+        }
+        emitHost({ type: 'host/session-removed', sessionId })
+        return ok(request, { sessionId })
+      },
     },
     subagents: {
       list: request => ok(request, { entries: [], parentAvailable: true }),
@@ -3080,6 +3091,7 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'session.list': return this.api.sessions.list(request)
       case 'session.search': return this.api.sessions.search(request, signal)
       case 'session.create': return this.api.sessions.create(request)
+      case 'session.delete': return this.api.sessions.delete(request)
       case 'session.history': return this.api.sessions.history(request)
       case 'session.models': return this.api.sessions.models(request)
       case 'session.selectModel': return this.api.sessions.selectModel(request)

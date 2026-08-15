@@ -364,6 +364,38 @@ export class SqliteSessionPersistence extends SessionPersistence implements Pers
     }))
   }
 
+  /**
+   * Remove one session through the coordinator: retire-wait, live checks,
+   * bookkeeping cleanup, then the backend row removal.
+   * @param id - the persisted session to remove.
+   * @param signal - optional cancellation for queued and backend work.
+   */
+  async remove(id: SessionId, signal?: AbortSignal): Promise<void> {
+    return this.coordinator.remove(id, signal)
+  }
+
+  /**
+   * Durably delete one stored session's rows (metadata and events). An
+   * absent identity is a no-op. Both deletes commit in one transaction so
+   * the cascade never leaves a metadata row without its events.
+   * @param id - the persisted session to remove.
+   * @param signal - optional cancellation for removal work.
+   */
+  async removeStored(id: SessionId, signal?: AbortSignal): Promise<void> {
+    signal?.throwIfAborted()
+    await this.ready
+    signal?.throwIfAborted()
+    this.db.exec('BEGIN')
+    try {
+      this.db.prepare('DELETE FROM events WHERE session_id = ?').run(id)
+      this.db.prepare('DELETE FROM sessions WHERE id = ?').run(id)
+      this.db.exec('COMMIT')
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
   /** Close the database handle (awaited by the coordinator's dispose, post-drain). */
   async close(): Promise<void> {
     await this.ready

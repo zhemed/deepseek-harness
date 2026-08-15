@@ -61,6 +61,7 @@ function scriptedApi(overrides: {
       }),
       updateQueue: r => ok(r, { accepted: true as const }),
       cancel: r => ok(r, { accepted: true as const }),
+      delete: r => ok(r, { sessionId: r.payload.sessionId }),
       ...overrides.sessions,
     },
     subagents: {

@@ -124,6 +124,16 @@ export abstract class SessionPersistence extends Service {
   }
 
   /**
+   * Durably remove one session's stored artifact and all coordinator
+   * bookkeeping for it. Refuses while the session is still live — the caller
+   * retires/disposes the live Session first (the API-layer delete flow owns
+   * that ordering). A session absent from storage is a no-op.
+   * @param id - the persisted session to remove.
+   * @param signal - optional cancellation for backend removal work.
+   */
+  abstract remove(id: SessionId, signal?: AbortSignal): Promise<void>
+
+  /**
    * Register a new session's metadata. A backend MAY defer the physical write
    * until the first {@link append} (lazy materialization), in which case a
    * created-but-never-appended session is absent from {@link list}

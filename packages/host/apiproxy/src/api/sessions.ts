@@ -370,4 +370,14 @@ export interface SessionsApi {
    */
   cancel(request: RpcRequest<{ sessionId: SessionId }>): Promise<RpcResponse<{ accepted: true }>>
 
+  /**
+   * Permanently removes one session: its durable log, its workspace
+   * accounting slot, and its archive-set entry. A session whose agent is
+   * currently running fails with `session-busy`; a session backed by a
+   * subagent fails with `agent-busy`; an id neither live nor persisted fails
+   * with `session-not-found`. Returns the removed id.
+   */
+  delete(request: RpcRequest<{ sessionId: SessionId }>):
+  Promise<RpcResponse<{ sessionId: SessionId }>>
+
 }
