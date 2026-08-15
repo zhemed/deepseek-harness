@@ -25,7 +25,6 @@ import type { DeepSeekSearchProviderOptions } from './provider.ts'
 import type {} from '@deepseek-ai/dsh-session-projection'
 import { z as zod } from 'zod'
 import type { ZodType } from 'zod'
-import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import { applyWebSearchProgress, type WebSearchProgressProjection } from './projection.ts'
 
 export {
@@ -141,7 +140,7 @@ function resolveOptions(ctx: Context, config: Config): DeepSeekSearchProviderOpt
 }
 
 /** Wire schema of the search-progress projection (whole value or pre-search null). */
-const webSearchProgressSchema: ZodType<WebSearchProgressProjection | null> = zod.union([
+const webSearchProgressSchema = zod.union([
   zod.object({
     callId: zod.string().min(1),
     query: zod.string().min(1),
@@ -150,7 +149,7 @@ const webSearchProgressSchema: ZodType<WebSearchProgressProjection | null> = zod
     done: zod.boolean().optional(),
   }),
   zod.null(),
-])
+]) as unknown as ZodType<WebSearchProgressProjection | null>
 
 /** Register the DeepSeek search provider with `ctx.web`. */
 export function apply(ctx: Context, config: Config): void {

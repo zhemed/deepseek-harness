@@ -288,7 +288,7 @@ export class DeepSeekSearchProvider implements WebSearchProvider {
       data: { callId, query: request.query, ...effort !== 'off' ? { effort } : {} },
     })
     throwIfSearchAborted(signal)
-    return this.streamSearch({ options, apiKey, endpoint, body, callId, signal })
+    return this.streamSearch({ options, apiKey, endpoint, body, callId, ...signal !== undefined ? { signal } : {} })
   }
 
   /**
@@ -354,7 +354,7 @@ export class DeepSeekSearchProvider implements WebSearchProvider {
     const resultBlocks: WebSearchToolResultBlock[] = []
     let textOpen = false
     let text = ''
-    let citations: TextBlock['citations'] = []
+    let citations: NonNullable<TextBlock['citations']> = []
     let thinkingOpen = false
     let thinking = ''
     let lastThinkEmit = 0

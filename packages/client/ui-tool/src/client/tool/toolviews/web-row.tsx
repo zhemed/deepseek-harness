@@ -38,7 +38,12 @@ export function WebRow({ toolName, block, inspect, t, useProjection }: WebRowPro
   // Live search progress: the host-computed webSearchProgress projection (the
   // web-search-deepseek provider's web/search-call|thinking|done session
   // events) drives the running card's effort badge and streamed thinking.
-  const progress = useProjection?.('webSearchProgress') as
+  // The webSearchProgress key is declared by the host web-search domain; the
+  // key space is open at runtime (faceOf takes any string), so read through a
+  // string-keyed projection face without importing the host domain into the
+  // client bundle.
+  const readProjection = useProjection as unknown as ((key: string) => unknown) | undefined
+  const progress = readProjection?.('webSearchProgress') as
     | { callId: string; query: string; effort?: string; thinking: string; done?: boolean }
     | null
     | undefined
