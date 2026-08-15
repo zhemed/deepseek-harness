@@ -14,17 +14,10 @@
  */
 
 import type { IncomingHttpHeaders } from 'node:http'
-import { isLoopbackHostname } from './loopback-hostname.ts'
 
 /** The request facts the fence reads from either HTTP representation. */
 interface ApiTrustRequest {
   headers: IncomingHttpHeaders | Headers
-}
-
-function header(headers: IncomingHttpHeaders | Headers, name: string): string | undefined {
-  if (headers instanceof Headers) return headers.get(name) ?? undefined
-  const value = headers[name]
-  return typeof value === 'string' ? value : undefined
 }
 
 /** Normalized URL of a Host-header authority (hostname lowercased, default port stripped, IPv6 bracketed), or undefined when unparsable. */
@@ -77,26 +70,13 @@ function canonicalAuthority(entry: string, entryUrl: URL): string {
  * where the bound port may be OS-assigned). Both sides compare through WHATWG
  * normalization, so case and a redundant `:80` never decide trust.
  */
-function isTrustedAuthority(hostUrl: URL, trustedHosts: readonly string[]): boolean {
-  return trustedHosts.some((entry) => {
-    const entryUrl = parseAuthority(entry)
-    if (entryUrl === undefined) return false
-    return canonicalAuthority(entry, entryUrl) === entryUrl.hostname
-      ? entryUrl.hostname === hostUrl.hostname
-      : entryUrl.host === hostUrl.host
-  })
-}
-
 /**
  * Decide whether one /api request may reach the RPC bridge.
  * @param request - Node HTTP or Fetch request facts (headers).
  * @param trustedHosts - non-loopback authorities this deployment serves: exact `host:port`, or port-less `host` matching any port.
  * @returns true when the Host is ours (loopback or trusted) and any attached browser markers are same-origin.
  */
-export function isTrustedApiRequest(request: ApiTrustRequest, trustedHosts: readonly string[]): boolean {
-  // [local override] Fully open: every /api request is allowed regardless of
-  // Host/Origin. User decision: remove the browser-trust fence for LAN access.
-  return true
+export function isTrustedApiRequest(_request: ApiTrustRequest, _trustedHosts: readonly string[]): boolean {
   // [local override] Fully open: every /api request is allowed regardless of
   // Host/Origin. User decision: remove the browser-trust fence for LAN access.
   return true
