@@ -1,0 +1,27 @@
+diff --git a/dist/api/anthropic-messages.js b/dist/api/anthropic-messages.js
+index 70ead54dbbbea64daff7350b70ce1c23352cd208..c101d726b1bd379dd9e79904aaaf8ff4108c90a9 100644
+--- a/dist/api/anthropic-messages.js
++++ b/dist/api/anthropic-messages.js
+@@ -631,6 +631,9 @@ export const streamSimple = (model, context, options) => {
+         maxTokens,
+         thinkingEnabled: true,
+         thinkingBudgetTokens: Math.min(adjusted.thinkingBudget, Math.max(0, maxTokens - 1024)),
++        // [local patch] Carry the harness effort to budget-based thinking models
++        // (DeepSeek via new-api) so the relay records and applies the real level.
++        effort: mapThinkingLevelToEffort(model, options.reasoning),
+     });
+ };
+ function isOAuthToken(apiKey) {
+@@ -774,6 +777,12 @@ function buildParams(model, context, isOAuthToken, options) {
+                     budget_tokens: options.thinkingBudgetTokens || 1024,
+                     display,
+                 };
++                // [local patch] Budget-based thinking with an explicit effort:
++                // DeepSeek's Anthropic-compatible endpoint (new-api) records the
++                // level from output_config.effort, so send it with the budget.
++                if (options.effort) {
++                    params.output_config = { effort: options.effort };
++                }
+             }
+         }
+         else if (options?.thinkingEnabled === false && model.thinkingLevelMap?.off !== null) {

@@ -69,4 +69,5 @@ minimumReleaseAgeExclude:
   - node-addon-require-builtin@0.1.4
 
 patchedDependencies:
+  '@earendil-works/pi-ai': patches/@earendil-works__pi-ai.patch
   node-pty@1.1.0: patches/node-pty@1.1.0.patch
