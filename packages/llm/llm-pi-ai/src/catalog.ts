@@ -79,6 +79,16 @@ const THINKING_LEVEL_GATE: Record<ModelThinkingLevel, true> = {
 /** Every pi-ai thinking level a profile may declare, in escalation order. */
 export const THINKING_LEVELS = Object.keys(THINKING_LEVEL_GATE) as readonly ModelThinkingLevel[]
 
+/** Generic 6档思考强度，新模型未声明 reasoningEfforts 时的自动默认值。 */
+export const DEFAULT_REASONING_EFFORTS: PiAiReasoningEfforts = {
+  off: null,
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+  xhigh: 'xhigh',
+  max: 'max',
+}
+
 /** The `compat.thinkingFormat` spellings pi-ai accepts on an `openai-completions` model. */
 type PiThinkingFormat = NonNullable<OpenAICompletionsCompat['thinkingFormat']>
 
@@ -266,6 +276,8 @@ export interface RouteCatalogRequest {
   defaultMaxTokens: number
   /** Modalities for a model neither the entry nor the catalog declares. */
   defaultInput: Model<Api>['input']
+  /** Generic 6档思考强度，供手写模型未声明 reasoningEfforts 时自动继承。 */
+  defaultReasoningEfforts?: PiAiReasoningEfforts | false
 }
 
 /** Report a route the deployment cannot serve, naming the settings key at fault. */
@@ -316,15 +328,20 @@ function resolveModelReasoning(
   provider: string,
   entry: PiAiModelProfile,
   base: Model<Api> | undefined,
+  defaultReasoningEfforts?: PiAiReasoningEfforts | false,
 ): ModelReasoning {
-  const efforts = entry.reasoningEfforts
+  const efforts = entry.reasoningEfforts !== undefined ? entry.reasoningEfforts : defaultReasoningEfforts
   if (efforts === undefined) {
     // Reasoning rides the installed entry or is absent: a bare capability flag
     // would make pi-ai advertise effort levels with no `thinkingLevelMap` to
     // spell them, and no listing endpoint reports a model's reasoning
     // protocol. The entry's map (when any) arrives through the `...base`
     // spread in the model literal.
-    return { reasoning: base?.reasoning ?? false }
+    if (base?.reasoning !== undefined) {
+      const baseMap = (base as unknown as { thinkingLevelMap?: ThinkingLevelMap }).thinkingLevelMap
+      return { reasoning: base.reasoning, ...(baseMap ? { thinkingLevelMap: baseMap } : {}) }
+    }
+    return { reasoning: false }
   }
   // The installed entry's map may ride along through `...base`; pi-ai never
   // reads it on a non-reasoning model, so stripping it is not worth a field
@@ -534,7 +551,7 @@ export function resolveRouteModels(request: RouteCatalogRequest): RouteCatalog {
       cost: base?.cost ?? NO_COST,
       contextWindow,
       maxTokens,
-      ...resolveModelReasoning(provider, entry, base),
+      ...resolveModelReasoning(provider, entry, base, request.defaultReasoningEfforts),
       ...resolveModelCompat(provider, entry, request.compat, base, api),
     }
   })

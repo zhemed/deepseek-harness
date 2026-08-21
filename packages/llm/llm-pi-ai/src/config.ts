@@ -120,6 +120,12 @@ export interface PiAiProviderProfile {
    * to answer instead.
    */
   defaultInput?: PiAiModality[]
+  /**
+   * Generic 6档思考强度，手写模型未声明 reasoningEfforts 时的自动继承值。
+   * 设为 false 可彻底关闭自动思考（保持旧版“不思考”行为）。
+   * 未设则自动使用 off/low/medium/high/xhigh/max 六档。
+   */
+  defaultReasoningEfforts?: PiAiReasoningEfforts | false
   /** Provider request headers; Harness attribution wins reserved names. */
   headers?: Record<string, string>
   /** Provider-neutral pi-ai reasoning level. */
@@ -240,6 +246,7 @@ const profile = z.object({
   defaultContextWindow: z.number().step(1).min(1).default(DEFAULT_CONTEXT_WINDOW),
   defaultMaxTokens: z.number().step(1).min(1).default(DEFAULT_MAX_TOKENS),
   defaultInput: z.array(z.union(MODALITIES)).default([...DEFAULT_INPUT]),
+  defaultReasoningEfforts: z.union([z.const(false), reasoningEfforts]),
   headers: z.dict(z.string()),
   reasoning: z.union(THINKING_LEVELS),
   thinkingBudgets,
@@ -332,6 +339,11 @@ export function resolveProfiles(
     if (defaultInput.length === 0) {
       throw new Error(`llm-pi-ai: provider "${provider}" defaultInput must name at least one modality`)
     }
+    const defaultReasoningEfforts = source.defaultReasoningEfforts === undefined
+      ? undefined
+      : source.defaultReasoningEfforts === false
+        ? false
+        : { ...source.defaultReasoningEfforts }
     // The route key, not the installed provider's own name: the directory has
     // always shown route keys, and a catalog route must not silently rename
     // itself on every configuration surface just because it gained a profile.
@@ -344,6 +356,7 @@ export function resolveProfiles(
       ...source.modelOverrides === undefined ? {} : { modelOverrides: source.modelOverrides },
       ...source.compat === undefined ? {} : { compat: source.compat },
       defaultInput,
+      ...defaultReasoningEfforts === undefined ? {} : { defaultReasoningEfforts },
       defaultContextWindow: source.defaultContextWindow ?? DEFAULT_CONTEXT_WINDOW,
       defaultMaxTokens: source.defaultMaxTokens ?? DEFAULT_MAX_TOKENS,
     })
