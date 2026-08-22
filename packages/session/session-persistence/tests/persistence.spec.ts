@@ -166,15 +166,6 @@ class MemoryPersistence extends SessionPersistence implements PersistenceBackend
     return [...this.store.values()].map(e => structuredClone(e.meta))
   }
 
-  async remove(id: SessionId, signal?: AbortSignal): Promise<void> {
-    return this.coordinator.remove(id, signal)
-  }
-
-  async removeStored(id: SessionId, signal?: AbortSignal): Promise<void> {
-    signal?.throwIfAborted()
-    this.store.delete(id)
-  }
-
   async listSnapshots(signal?: AbortSignal): Promise<SessionPersistenceSnapshot[]> {
     signal?.throwIfAborted()
     return [...this.store.values()].map(entry => ({
@@ -241,11 +232,6 @@ class ControlledBackend implements PersistenceBackend<never> {
 
   async list(): Promise<SessionHeader[]> {
     return [...this.store.values()].map(entry => structuredClone(entry.meta))
-  }
-
-  async removeStored(id: SessionId, signal?: AbortSignal): Promise<void> {
-    signal?.throwIfAborted()
-    this.store.delete(id)
   }
 
   async close(): Promise<void> {

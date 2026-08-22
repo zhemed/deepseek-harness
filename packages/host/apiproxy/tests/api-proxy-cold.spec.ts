@@ -285,7 +285,6 @@ describe('cold history recovery view', () => {
       appendBatch: () => Promise.resolve(),
       commitRepair: () => Promise.resolve(),
       list: () => Promise.resolve([structuredClone(meta)]),
-      removeStored: () => Promise.resolve(),
     }
     const coordinator = new PersistenceCoordinator(ctx, backend)
     ctx.provide('sessionPersistence', {

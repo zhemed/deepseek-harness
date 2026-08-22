@@ -32,24 +32,9 @@ const WEB_TITLES: Record<string, string> = {
  * the completed retrieval's web card as the row's collapsed-by-default card
  * body. The row discriminates on `toolName` only to pick its icon and title.
  */
-export function WebRow({ toolName, block, inspect, t, useProjection }: WebRowProps) {
+export function WebRow({ toolName, block, inspect, t }: WebRowProps) {
   const model = toolRowModel(toolName, block)
   const web = webCardModel(block)
-  // Live search progress: the host-computed webSearchProgress projection (the
-  // web-search-deepseek provider's web/search-call|thinking|done session
-  // events) drives the running card's effort badge and streamed thinking.
-  // The webSearchProgress key is declared by the host web-search domain; the
-  // key space is open at runtime (faceOf takes any string), so read through a
-  // string-keyed projection face without importing the host domain into the
-  // client bundle.
-  const readProjection = useProjection as unknown as ((key: string) => unknown) | undefined
-  const progress = readProjection?.('webSearchProgress') as
-    | { callId: string; query: string; effort?: string; thinking: string; done?: boolean }
-    | null
-    | undefined
-  const live = toolName === 'web_search' && model.state === 'running' && progress != null
-  const summarySuffix = live && progress.effort !== undefined ? `思考强度：${progress.effort}` : undefined
-  const body = live && progress.thinking.length > 0 ? progress.thinking : null
   // Web search uses a globe; local grep/glob keep the magnifier family.
   const icon = toolName === 'web_fetch' ? <IconBrowseOutline16 size={14} /> : <IconGlobeOutline14 size={14} />
   return (
@@ -60,8 +45,7 @@ export function WebRow({ toolName, block, inspect, t, useProjection }: WebRowPro
       icon={icon}
       title={WEB_TITLES[toolName] ?? model.title}
       summary={model.summary}
-      summarySuffix={summarySuffix}
-      body={body}
+      body={null}
       output={model.output}
       errorSummary={model.errorSummary}
       web={web}

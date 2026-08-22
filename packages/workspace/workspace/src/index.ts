@@ -355,30 +355,6 @@ export class WorkspaceRegistry extends Service {
     return entity
   }
 
-  /**
-   * Remove one session from every durable registry surface: detach it from
-   * any workspace account and drop it from the registry-global archive set.
-   * Unknown ids are an idempotent no-op. Never touches the session's own
-   * stored log — the caller owns artifact removal.
-   * @param sessionId - the session to forget.
-   * @returns resolution after durability.
-   */
-  forgetSession(sessionId: SessionId): Promise<void> {
-    return this.enqueueOperation(async () => {
-      for (const entity of this.entities.values()) {
-        if (entity.sessionIds.includes(sessionId)) {
-          await entity.detachSession(sessionId)
-        }
-      }
-      const state = this.requireState()
-      if (!state.archivedSessionIds.includes(sessionId)) return
-      await this.setState({
-        ...state,
-        archivedSessionIds: state.archivedSessionIds.filter(id => id !== sessionId),
-      })
-    })
-  }
-
   private async deleteKnown(id: WorkspaceId): Promise<boolean> {
     const entity = this.entities.get(id)
     if (entity === undefined) return false

@@ -21,7 +21,6 @@ import {
   sessionCancelValueSchema,
   sessionAttachmentValueSchema,
   sessionCreateValueSchema,
-  sessionDeleteValueSchema,
   sessionForkValueSchema,
   sessionHistoryValueSchema,
   sessionListValueSchema,
@@ -90,7 +89,6 @@ export interface IApiClient {
     list(payload: RequestPayload<'session.list'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'session.list'>>>
     search(payload: RequestPayload<'session.search'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'session.search'>>>
     create(payload: RequestPayload<'session.create'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'session.create'>>>
-    delete(payload: RequestPayload<'session.delete'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'session.delete'>>>
     history(payload: RequestPayload<'session.history'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'session.history'>>>
     models(payload: RequestPayload<'session.models'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'session.models'>>>
     selectModel(payload: RequestPayload<'session.selectModel'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'session.selectModel'>>>
@@ -175,7 +173,6 @@ const UNARY_VALUE_SCHEMAS: { [K in keyof RpcMethodMap]: z.ZodType<Wire<ResponseV
   'session.list': sessionListValueSchema,
   'session.search': sessionSearchValueSchema,
   'session.create': sessionCreateValueSchema,
-  'session.delete': sessionDeleteValueSchema,
   'session.history': sessionHistoryValueSchema,
   'session.models': sessionModelsValueSchema,
   'session.selectModel': sessionSelectModelValueSchema,
@@ -298,19 +295,9 @@ export abstract class AbstractApiClient implements IApiClient {
     return loc?.origin !== undefined && loc.origin !== 'null' ? loc.origin : INTERNAL_BASE
   }
 
-  /** RFC 4122 v4 UUID without requiring a secure context (unavailable on plain http). */
-  private randomUuid(): string {
-    const bytes = globalThis.crypto.getRandomValues(new Uint8Array(16))
-    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
-    view.setUint8(6, (view.getUint8(6) & 0x0f) | 0x40)
-    view.setUint8(8, (view.getUint8(8) & 0x3f) | 0x80)
-    const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('')
-    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
-  }
-
   protected mintRpcId(): RpcId {
-    // crypto.randomUUID needs a secure context and is unavailable on plain http.
-    return RpcId(this.randomUuid())
+    // crypto.randomUUID is a Web API (browser + Node ≥19): keeps this base platform-neutral.
+    return RpcId(crypto.randomUUID())
   }
 
   /**
@@ -426,7 +413,6 @@ export abstract class AbstractApiClient implements IApiClient {
     list: (payload, signal) => this.callUnary('session.list', payload, signal),
     search: (payload, signal) => this.callUnary('session.search', payload, signal),
     create: (payload, signal) => this.callUnary('session.create', payload, signal),
-    delete: (payload, signal) => this.callUnary('session.delete', payload, signal),
     history: (payload, signal) => this.callUnary('session.history', payload, signal),
     models: (payload, signal) => this.callUnary('session.models', payload, signal),
     selectModel: (payload, signal) => this.callUnary('session.selectModel', payload, signal),

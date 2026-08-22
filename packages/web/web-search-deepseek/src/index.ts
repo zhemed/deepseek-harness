@@ -22,10 +22,6 @@ import {
   DEEPSEEK_DEFAULT_MODEL,
 } from './provider.ts'
 import type { DeepSeekSearchProviderOptions } from './provider.ts'
-import type {} from '@deepseek-ai/dsh-session-projection'
-import { z as zod } from 'zod'
-import type { ZodType } from 'zod'
-import { applyWebSearchProgress, type WebSearchProgressProjection } from './projection.ts'
 
 export {
   DeepSeekSearchProvider,
@@ -37,7 +33,6 @@ export {
   DEEPSEEK_PROVIDER_ID,
 } from './provider.ts'
 export type { DeepSeekSearchLlmRequest, DeepSeekSearchProviderOptions } from './provider.ts'
-export type * from './projection.ts'
 
 /** Cordis plugin name used by loader diagnostics. */
 export const name = 'web-search-deepseek'
@@ -125,31 +120,8 @@ function resolveOptions(ctx: Context, config: Config): DeepSeekSearchProviderOpt
         request,
       )
     },
-    resolveReasoningEffort: () => {
-      const selection = ctx.get('agentDefaultModel')?.currentSelection?.()
-      return typeof selection?.reasoningEffort === 'string' ? selection.reasoningEffort : undefined
-    },
-    emitSearchEvent: (event) => {
-      const session = ctx.get('agents')?.currentInitiator()?.session
-      if (session === undefined) return
-      if (event.type === 'web/search-call') session.append('web/search-call', event.data)
-      else if (event.type === 'web/search-thinking') session.append('web/search-thinking', event.data)
-      else session.append('web/search-done', event.data)
-    },
   }
 }
-
-/** Wire schema of the search-progress projection (whole value or pre-search null). */
-const webSearchProgressSchema = zod.union([
-  zod.object({
-    callId: zod.string().min(1),
-    query: zod.string().min(1),
-    effort: zod.string().optional(),
-    thinking: zod.string(),
-    done: zod.boolean().optional(),
-  }),
-  zod.null(),
-]) as unknown as ZodType<WebSearchProgressProjection | null>
 
 /** Register the DeepSeek search provider with `ctx.web`. */
 export function apply(ctx: Context, config: Config): void {
@@ -163,16 +135,4 @@ export function apply(ctx: Context, config: Config): void {
     onChange: () => {},
   })
   ctx.web.registerSearchProvider(new DeepSeekSearchProvider(() => resolveOptions(ctx, current())))
-  // Live search progress projection: latest web/search-* whole value, cleared
-  // on the next turn/start. Only active when a projection registry is composed.
-  ctx.inject(['sessionProjections'], (projectionCtx) => {
-    projectionCtx.sessionProjections.register<'webSearchProgress', WebSearchProgressProjection | null>({
-      key: 'webSearchProgress',
-      schema: webSearchProgressSchema,
-      init: () => null,
-      apply: applyWebSearchProgress,
-      view: state => state,
-      stateVersion: 1,
-    })
-  })
 }

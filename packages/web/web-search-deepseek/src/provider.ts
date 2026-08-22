@@ -49,24 +49,6 @@ export const DEEPSEEK_DEFAULT_MAX_USES = 5
 /** Attribution header sent on every request. Bump with the package version. */
 const USER_AGENT = 'deepseek-harness/0.0.1'
 
-/** Thinking budgets for the search model call, keyed by the harness effort level. */
-const THINKING_BUDGETS: Readonly<Record<'high' | 'max', number>> = { high: 8192, max: 32768 }
-
-/** Map a harness effort to the search request's thinking posture; anything unknown is off. */
-function normalizeEffort(value: string | undefined): 'off' | 'high' | 'max' {
-  return value === 'high' || value === 'max' ? value : 'off'
-}
-
-/** RFC 4122 v4 UUID without requiring a secure context. */
-function randomUuid(): string {
-  const bytes = globalThis.crypto.getRandomValues(new Uint8Array(16))
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
-  view.setUint8(6, (view.getUint8(6) & 0x0f) | 0x40)
-  view.setUint8(8, (view.getUint8(8) & 0x3f) | 0x80)
-  const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('')
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
-}
-
 /**
  * Exact secret-free DeepSeek Messages request recorded immediately before one
  * auxiliary search dispatch.
@@ -92,57 +74,13 @@ export interface DeepSeekSearchLlmRequest {
       readonly name: 'web_search'
       readonly max_uses: number
     }]
-    /** Streaming request: search results and thinking arrive over SSE. */
-    readonly stream?: boolean
-    /** Thinking block configuration; present unless the effort level is `off`. */
-    readonly thinking?: { readonly type: 'enabled'; readonly budget_tokens: number }
-    /** Effort level forwarded to the provider; present unless the effort level is off. */
-    readonly output_config?: { readonly effort: 'high' | 'max' }
   }
 }
-
-/** Data of one search-started progress event. */
-export interface WebSearchCallEventData {
-  /** Provider-generated operation id pairing call/thinking/done events. */
-  callId: string
-  /** The query being searched. */
-  query: string
-  /** The harness effort level used (`high`/`max`); omitted when `off`. */
-  effort?: string
-}
-
-/** Data of one thinking progress event (cumulative text, throttled). */
-export interface WebSearchThinkingEventData {
-  /** Pairing id from the search-call event. */
-  callId: string
-  /** Cumulative thinking text so far. */
-  text: string
-}
-
-/** Data of one completed-search event. */
-export interface WebSearchDoneEventData {
-  /** Pairing id from the search-call event. */
-  callId: string
-  /** Final citeable source count. */
-  sourceCount: number
-}
-
-/** One live search-progress event, appended to the owning session mid-execution. */
-export type WebSearchProgressEvent =
-  | { type: 'web/search-call'; data: WebSearchCallEventData }
-  | { type: 'web/search-thinking'; data: WebSearchThinkingEventData }
-  | { type: 'web/search-done'; data: WebSearchDoneEventData }
 
 declare module '@deepseek-ai/dsh-session/types' {
   interface SessionEventMap {
     /** Secret-free auxiliary DeepSeek search request recorded before dispatch. */
     'web/deepseek-search-llm-request': DeepSeekSearchLlmRequest
-    /** One search operation started (query + effort). */
-    'web/search-call': WebSearchCallEventData
-    /** Cumulative thinking text for one in-flight search (throttled). */
-    'web/search-thinking': WebSearchThinkingEventData
-    /** One search completed (final source count). */
-    'web/search-done': WebSearchDoneEventData
   }
 }
 
@@ -169,13 +107,6 @@ export interface DeepSeekSearchProviderOptions {
    * prevents dispatch so model-visible auxiliary input cannot escape logging.
    */
   recordRequest?: (request: DeepSeekSearchLlmRequest) => void
-  /**
-   * Resolve the owning session's current reasoning effort (`off`/`high`/`max`);
-   * absent or unrecognized means no thinking block in the request.
-   */
-  resolveReasoningEffort?: () => string | undefined
-  /** Append one live search-progress event to the owning session. */
-  emitSearchEvent?: (event: WebSearchProgressEvent) => void
 }
 
 /**
@@ -270,8 +201,6 @@ export class DeepSeekSearchProvider implements WebSearchProvider {
     const options = this.resolveOptions()
     const apiKey = await this.apiKey(options, signal)
     throwIfSearchAborted(signal)
-    const effort = normalizeEffort(options.resolveReasoningEffort?.())
-    const callId = randomUuid()
     const endpoint = `${options.baseURL}/messages`
     const body: DeepSeekSearchLlmRequest['body'] = {
       model: options.model,
@@ -281,34 +210,13 @@ export class DeepSeekSearchProvider implements WebSearchProvider {
         content: [{ type: 'text', text: `Perform a web search for the query: ${request.query}` }],
       }],
       tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: options.maxUses }],
-      stream: true,
-      ...effort !== 'off' ? { thinking: { type: 'enabled', budget_tokens: THINKING_BUDGETS[effort] }, output_config: { effort } } : {},
     }
-    options.recordRequest?.({ endpoint, apiVersion: options.apiVersion, body })
-    options.emitSearchEvent?.({
-      type: 'web/search-call',
-      data: { callId, query: request.query, ...effort !== 'off' ? { effort } : {} },
+    options.recordRequest?.({
+      endpoint,
+      apiVersion: options.apiVersion,
+      body,
     })
     throwIfSearchAborted(signal)
-    return this.streamSearch({ options, apiKey, endpoint, body, callId, ...signal !== undefined ? { signal } : {} })
-  }
-
-  /**
-   * POST one Anthropic-compatible Messages search as an SSE stream and fold it
-   * into the same normalized result the non-streaming path produced. Thinking
-   * deltas surface as throttled `web/search-thinking` session events so a
-   * running search card can render them live; `web/search-done` carries the
-   * final source count.
-   */
-  private async streamSearch(params: {
-    options: DeepSeekSearchProviderOptions
-    apiKey: string
-    endpoint: string
-    body: DeepSeekSearchLlmRequest['body']
-    callId: string
-    signal?: AbortSignal
-  }): Promise<WebSearchResult> {
-    const { options, apiKey, endpoint, body, callId, signal } = params
     let response: Response
     try {
       response = await fetch(endpoint, {
@@ -321,7 +229,7 @@ export class DeepSeekSearchProvider implements WebSearchProvider {
           'authorization': `Bearer ${apiKey}`,
           'anthropic-version': options.apiVersion,
           'content-type': 'application/json',
-          'accept': 'text/event-stream',
+          'accept': 'application/json',
           'user-agent': USER_AGENT,
         },
         body: JSON.stringify(body),
@@ -344,130 +252,21 @@ export class DeepSeekSearchProvider implements WebSearchProvider {
         // into a generic HTTP-error message — cancellation is not a provider
         // error (the seam's cancellation contract).
         if (signal?.aborted === true || isAbortError(error)) throw searchAborted(signal, error)
+        // Otherwise: the HTTP status is already captured in `message` above; a
+        // malformed/non-JSON error body (normal for gateway 5xx/429s) can only
+        // cost a richer provider message, never the real error.
       }
       throw new WebError(message, 'WEB_PROVIDER_ERROR')
     }
 
-    if (response.body === null) {
-      throw new WebError('DeepSeek returned an empty response body', 'WEB_PROVIDER_ERROR')
-    }
-
-    const blocks: ContentBlock[] = []
-    const resultBlocks: WebSearchToolResultBlock[] = []
-    let textOpen = false
-    let text = ''
-    let citations: NonNullable<TextBlock['citations']> = []
-    let thinkingOpen = false
-    let thinking = ''
-    let lastThinkEmit = 0
-    const emitThinking = (): void => {
-      if (thinking.length === 0) return
-      const now = Date.now()
-      if (now - lastThinkEmit < 150) return
-      lastThinkEmit = now
-      options.emitSearchEvent?.({ type: 'web/search-thinking', data: { callId, text: thinking } })
-    }
-    const finishThinking = (): void => {
-      if (!thinkingOpen) return
-      thinkingOpen = false
-      if (thinking.length > 0) {
-        options.emitSearchEvent?.({ type: 'web/search-thinking', data: { callId, text: thinking } })
-      }
-      thinking = ''
-      lastThinkEmit = 0
-    }
-    const handleEvent = (eventType: string, data: string): void => {
-      switch (eventType) {
-        case 'content_block_start': {
-          const parsed = JSON.parse(data) as { content_block: { type: string; [key: string]: unknown } }
-          const block = parsed.content_block
-          if (block.type === 'thinking') {
-            thinkingOpen = true
-            thinking = ''
-          } else if (block.type === 'text') {
-            textOpen = true
-            text = ''
-            citations = []
-          } else if (block.type === 'web_search_tool_result') {
-            resultBlocks.push(block as unknown as WebSearchToolResultBlock)
-          }
-          break
-        }
-        case 'content_block_delta': {
-          const parsed = JSON.parse(data) as {
-            delta: { type: string; thinking?: string; text?: string; citations?: TextBlock['citations'] }
-          }
-          const delta = parsed.delta
-          if (delta.type === 'thinking_delta' && delta.thinking !== undefined) {
-            thinking += delta.thinking
-            emitThinking()
-          } else if (delta.type === 'text_delta' && delta.text !== undefined) {
-            text += delta.text
-          } else if (delta.type === 'citations_delta' && delta.citations !== undefined) {
-            citations.push(...delta.citations)
-          }
-          break
-        }
-        case 'content_block_stop':
-          if (thinkingOpen) finishThinking()
-          else if (textOpen) {
-            textOpen = false
-            blocks.push({ type: 'text', text, ...citations.length > 0 ? { citations } : {} })
-            text = ''
-            citations = []
-          }
-          break
-        case 'error': {
-          const parsed = JSON.parse(data) as { error?: { message?: string } }
-          throw new WebError(parsed.error?.message ?? 'DeepSeek stream error', 'WEB_PROVIDER_ERROR')
-        }
-        default:
-          break
-      }
-    }
-
-    const decoder = new TextDecoder()
-    let buffer = ''
-    let eventType = ''
-    let eventData = ''
     try {
-      for await (const chunk of response.body) {
-        buffer += decoder.decode(chunk, { stream: true })
-        let newline = buffer.indexOf('\n')
-        while (newline >= 0) {
-          const line = buffer.slice(0, newline).replace(/\r$/u, '')
-          buffer = buffer.slice(newline + 1)
-          if (line.length === 0) {
-            if (eventType.length > 0) {
-              handleEvent(eventType, eventData)
-              eventType = ''
-              eventData = ''
-            }
-          } else if (line.startsWith('event:')) {
-            eventType = line.slice(6).trim()
-          } else if (line.startsWith('data:')) {
-            eventData = line.slice(5).trim()
-          }
-          newline = buffer.indexOf('\n')
-        }
-      }
-      if (eventType.length > 0) handleEvent(eventType, eventData)
+      const payload = await response.json() as AnthropicResponse
+      return mapAnthropicResponse(payload)
     } catch (error: unknown) {
       if (signal?.aborted === true || isAbortError(error)) throw searchAborted(signal, error)
       if (error instanceof WebError) throw error
-      throw new WebError(`DeepSeek search stream failed: ${String(error)}`, 'WEB_PROVIDER_ERROR', { cause: error })
+      throw new WebError(`DeepSeek returned an unprocessable response body: ${String(error)}`, 'WEB_PROVIDER_ERROR', { cause: error })
     }
-    finishThinking()
-
-    if (resultBlocks.length === 0) {
-      throw new WebError(
-        'DeepSeek returned no web_search_tool_result blocks; the request may not have triggered native web search',
-        'WEB_PROVIDER_ERROR',
-      )
-    }
-    const result = mapAnthropicResponse({ content: [...blocks, ...resultBlocks] } as AnthropicResponse)
-    options.emitSearchEvent?.({ type: 'web/search-done', data: { callId, sourceCount: result.sources.length } })
-    return result
   }
 
   /**

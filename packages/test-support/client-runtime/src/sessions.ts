@@ -185,7 +185,7 @@ export class TestSessions implements ISessions {
   /** Calls observed on the service-level face, newest last. */
   readonly calls: {
     method: 'open' | 'openSubagent' | 'setSubagentCatalogOpen' | 'refreshSubagents'
-      | 'clear' | 'search' | 'fork' | 'deleteSession'
+      | 'clear' | 'search' | 'fork'
     args: unknown[]
   }[] = []
 
@@ -487,12 +487,6 @@ export class TestSessions implements ISessions {
   fork(opts: { sessionId: SessionId; atSeq?: number; increaseTitle?: boolean }): Promise<SessionId> {
     this.calls.push({ method: 'fork', args: [opts] })
     return Promise.resolve(opts.sessionId)
-  }
-
-  /** Record a delete request; the fixture never removes the row (bench-only surface). */
-  deleteSession(sessionId: SessionId): Promise<void> {
-    this.calls.push({ method: 'deleteSession', args: [sessionId] })
-    return Promise.resolve()
   }
 
   /**

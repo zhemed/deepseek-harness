@@ -113,10 +113,6 @@ class TestPersistence extends SessionPersistence {
     return Promise.resolve(headers)
   }
 
-  remove(id: SessionIdType, _signal?: AbortSignal): Promise<void> {
-    TestPersistence.entries.delete(id)
-    return Promise.resolve()
-  }
 
   async listSnapshots() {
     return [...TestPersistence.entries.values()].map(entry => ({

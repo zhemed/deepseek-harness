@@ -158,11 +158,6 @@ class TestPersistence extends SessionPersistence {
     return Promise.resolve([...this.durable.values()].map(value => value.meta))
   }
 
-  async remove(id: SessionId, _signal?: AbortSignal): Promise<void> {
-    this.durable.delete(id)
-    this.logical.delete(id)
-  }
-
   async listSnapshots(): Promise<SessionPersistenceSnapshot[]> {
     await this.onListSnapshots?.()
     return [...this.durable.values()].map((value, index) => ({

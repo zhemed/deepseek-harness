@@ -96,14 +96,6 @@ export interface ISessions {
    */
   fork(opts: { sessionId: SessionId; atSeq?: number; increaseTitle?: boolean }): Promise<SessionId>
   /**
-   * Permanently delete one session: the host retires its live agent (if
-   * any), removes the durable log and its workspace accounting, and the row
-   * disappears. A running session is refused by the host.
-   * @param sessionId - the session to delete.
-   * @throws with the RPC error code and message on failure.
-   */
-  deleteSession(sessionId: SessionId): Promise<void>
-  /**
    * Register a per-session standard-props provider (hooks become `use<Name>`
    * selector hooks on the render side; props spread verbatim).
    * @param descriptor - static member roster plus per-session resolver.
